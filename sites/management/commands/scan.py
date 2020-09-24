@@ -15,6 +15,60 @@ logger = logging.getLogger(__name__)
 TIMEOUT_REQUESTS = 5
 
 
+JS = """
+const { collector } = require("./build");
+const { join } = require("path");
+
+(async () => {
+  // To emulate a device change the value to a name from this array:
+  // https://github.com/puppeteer/puppeteer/blob/master/lib/DeviceDescriptors.js
+  const EMULATE_DEVICE = "iPhone X";
+
+  // Save the results to a folder
+  let OUT_DIR = true;
+
+  // The URL to test
+  const URL = "{url}";
+
+  const defaultConfig = {
+    inUrl: `http://${URL}`,
+    numPages: 3,
+    headless: true,
+    emulateDevice: EMULATE_DEVICE
+  };
+
+  const result = await collector(
+    OUT_DIR
+      ? { ...defaultConfig, ...{ outDir: join(__dirname, "demo-dir") } }
+      : defaultConfig
+  );
+  if (OUT_DIR) {
+    console.log(
+      `For captured data please look in ${join(__dirname, "demo-dir")}`
+    );
+  }
+})();
+"""
+
+
+def blacklight(domain):
+    with open('scan.js', 'w') as f:
+        scan_js_content = JS.replace('{url}', domain)
+        f.write(scan_js_content)
+
+    blacklight_cmd = ['node', 'scan.js']
+
+    p = subprocess.Popen(
+        blacklight_cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True)
+    stdout, stderr = p.communicate()
+
+    breakpoint()
+
+
+
 def pshtt(domain):
     pshtt_cmd = ['pshtt', '--json', '--timeout', '5', domain]
 
@@ -87,8 +141,9 @@ def is_onion_available(pshtt_results) -> Optional[bool]:
 
 
 def scan(site):
-    # Scan the domain with pshtt
+    # Scan the domain with pshtt (HTTPS) and blacklight (tracking)
     results, stdout, stderr = pshtt(site.domain)
+    privacy_results, stdout, stderr = blacklight(site.domain)
 
     scan = Scan(
         site=site,
